@@ -1,0 +1,242 @@
+import argparse
+import logging
+from panda3d.core import LVector3
+
+from dronesim import SimulatorApplication, Panda3DEnvironment, make_uav
+from dronesim.sensor.panda3d.camera import Panda3DCameraSensor
+from direct.showbase.ShowBaseGlobal import globalClock
+from direct.showbase.DirectObject import DirectObject
+from direct.task import Task
+
+import math
+
+logging.basicConfig(level=logging.INFO)
+
+class DroneController(DirectObject):
+    def __init__(self, drone, case=1):
+        self.drone = drone
+        self.case = case
+
+        self.path_active = False
+        self.stopping = False
+        self.autonomy_active = False
+        self.landing_requested = False
+
+        self.time = 0.0
+        self.speed = 1.5
+        self.radius = 100.0
+        self.max_time = (2 * math.pi) / self.speed
+        self.center = None
+        self.start_pos = None
+        self.start_hpr = None
+        self.stop_interp_t = 0.0
+        self.stop_interp_duration = 3.0
+
+        self.flight_phase = 0
+        self.takeoff_height = 50.0
+        self.landing_pos = LVector3(100, 50, 0)
+        self.vertical_speed = 10.0
+        self.horizontal_speed = 25.0
+
+        self.interp_start_pos = None
+        self.interp_target_pos = None
+        self.interp_start_time = 0.0
+        self.interp_duration = 0.0
+
+        self.last_drawn = None
+        self.trail_segments = []
+
+        self.accept("z", self.start_path)
+        self.accept("x", self.request_stop)
+        self.accept("k", self.start_landing)
+
+        taskMgr.add(self.update_path, "UpdatePathTask")
+        taskMgr.add(self.update_landing_request, "UpdateLandingRequestTask")
+
+    def start_path(self):
+        if self.autonomy_active:
+            logging.info("Drone busy with autonomous flight.")
+            return
+        if self.drone.get_z(base.render) <= 0.1:
+            logging.info("Drone is landed — can't start path.")
+            return
+        if self.path_active:
+            logging.info("Already circling.")
+            return
+
+        self.start_pos = self.drone.get_pos(base.render)
+        self.start_hpr = self.drone.get_hpr(base.render)
+        self.center = self.start_pos - LVector3(self.radius, 0, 0)
+        self.time = 0.0
+        self.path_active = True
+        self.stopping = False
+        logging.info(f"Drone 1 started circular path at center {self.center}")
+
+    def request_stop(self):
+        if not self.path_active or self.stopping:
+            logging.info("Drone not circling or already stopping.")
+            return
+        self.stopping = True
+        logging.info("Drone 1 returning to start position.")
+
+    def update_path(self, task):
+        if not self.path_active or self.center is None:
+            return Task.cont
+
+        dt = globalClock.get_dt()
+        self.time += dt
+
+        if self.stopping:
+            if self.time >= self.max_time:
+                if self.stop_interp_t == 0.0:
+                    self.stop_interp_t = dt
+                self.stop_interp_t += dt
+
+                t_norm = min(self.stop_interp_t / self.stop_interp_duration, 1.0)
+                current_pos = self.drone.get_pos(base.render)
+                interp_pos = current_pos * (1 - t_norm) + self.start_pos * t_norm
+                interp_hpr = self.drone.get_hpr(base.render) * (1 - t_norm) + self.start_hpr * t_norm
+
+                self.drone.set_pos(interp_pos)
+                self.drone.set_hpr(interp_hpr)
+
+                if t_norm >= 1.0:
+                    self.path_active = False
+                    self.stopping = False
+                    self.stop_interp_t = 0.0
+                    logging.info("Drone 1 finished return-to-start.")
+
+                return Task.cont
+
+        if self.time >= self.max_time:
+            self.time -= self.max_time
+
+        angle = self.time * self.speed
+        z_offset = math.sin(angle) * 0.5
+
+        x = self.center.x + self.radius * math.cos(angle)
+        y = self.center.y + self.radius * math.sin(angle)
+        z = self.start_pos.z + z_offset
+
+        self.drone.set_pos(x, y, z)
+        self.drone.look_at(
+            self.center.x + self.radius * math.cos(angle + 0.01),
+            self.center.y + self.radius * math.sin(angle + 0.01),
+            z
+        )
+
+        return Task.cont
+
+    def start_landing(self):
+        if self.landing_requested or self.path_active or self.autonomy_active:
+            logging.info("Drone busy or already landing.")
+            return
+        if self.drone.get_z(base.render) <= 0.1:
+            logging.info("Drone is already on ground.")
+            return
+
+        self.landing_requested = True
+        self.interp_start_pos = self.drone.get_pos(base.render)
+        self.interp_target_pos = LVector3(self.interp_start_pos.x, self.interp_start_pos.y, 0)
+        self.interp_duration = max((self.interp_target_pos - self.interp_start_pos).length() / self.vertical_speed, 1.0)
+        self.interp_start_time = globalClock.get_frame_time()
+        logging.info("Drone 1 starting manual landing.")
+
+    def update_landing_request(self, task):
+        if not self.landing_requested:
+            return Task.cont
+
+        elapsed = globalClock.get_frame_time() - self.interp_start_time
+        t = min(elapsed / self.interp_duration, 1.0)
+        t_smooth = t * t * (3 - 2 * t)
+
+        new_pos = self.interp_start_pos * (1 - t_smooth) + self.interp_target_pos * t_smooth
+        self.drone.set_pos(new_pos)
+
+        if t >= 1.0:
+            self.landing_requested = False
+            logging.info("Drone 1 manual landing complete.")
+
+        return Task.cont
+
+class Drone2Controller(DroneController):
+    def __init__(self, drone):
+        super().__init__(drone)
+        self.ignore_all()
+        self.accept("c", self.start_autonomous_flight)
+        taskMgr.add(self.update_autonomous_flight, "UpdateAutoFlight2")
+
+    def start_autonomous_flight(self):
+        if self.autonomy_active:
+            logging.info("Drone 2 already in autonomous flight.")
+            return
+        if self.drone.get_z(base.render) > 0.1:
+            logging.info("Drone 2 must be on ground to start.")
+            return
+
+        self.autonomy_active = True
+        self.flight_phase = 1
+        self.interp_start_pos = self.drone.get_pos(base.render)
+        self.interp_target_pos = LVector3(self.interp_start_pos.x, self.interp_start_pos.y, self.takeoff_height)
+        self.interp_duration = max((self.interp_target_pos - self.interp_start_pos).length() / self.vertical_speed, 1.0)
+        self.interp_start_time = globalClock.get_frame_time()
+        logging.info("Drone 2 starting autonomous sequence.")
+
+    def update_autonomous_flight(self, task):
+        if not self.autonomy_active:
+            return Task.cont
+
+        elapsed = globalClock.get_frame_time() - self.interp_start_time
+        t = min(elapsed / self.interp_duration, 1.0)
+        t_smooth = t * t * (3 - 2 * t)
+
+        new_pos = self.interp_start_pos * (1 - t_smooth) + self.interp_target_pos * t_smooth
+        self.drone.set_pos(new_pos)
+
+        if t >= 1.0:
+            if self.flight_phase == 1:
+                self.flight_phase = 2
+                self.interp_start_pos = self.drone.get_pos(base.render)
+                self.interp_target_pos = LVector3(self.landing_pos.x, self.landing_pos.y, self.takeoff_height)
+                self.interp_duration = max((self.interp_target_pos - self.interp_start_pos).length() / self.horizontal_speed, 1.0)
+                self.interp_start_time = globalClock.get_frame_time()
+                logging.info("Drone 2 takeoff complete. Flying to landing pos.")
+            elif self.flight_phase == 2:
+                self.flight_phase = 3
+                self.interp_start_pos = self.drone.get_pos(base.render)
+                self.interp_target_pos = LVector3(self.landing_pos.x, self.landing_pos.y, 0)
+                self.interp_duration = max((self.interp_target_pos - self.interp_start_pos).length() / self.vertical_speed, 1.0)
+                self.interp_start_time = globalClock.get_frame_time()
+                logging.info("Drone 2 beginning descent.")
+            elif self.flight_phase == 3:
+                self.autonomy_active = False
+                self.flight_phase = 0
+                logging.info("Drone 2 autonomous flight complete.")
+
+        if self.flight_phase == 2:
+            self.drone.look_at(self.interp_target_pos)
+
+        return Task.cont
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.parse_args()
+
+    sim, controller1, drone1 = make_uav()
+    _, controller2, drone2 = make_uav()
+
+    env = Panda3DEnvironment("basic_env")
+    app = SimulatorApplication(env, drone1, drone2)
+
+    down_cam1 = Panda3DCameraSensor("downCameraRGB_1", size=(512, 512))
+    sim.add_sensor(down_camera_rgb=down_cam1)
+    down_cam1.reparent_to(drone1)
+    down_cam1.set_hpr(0, -90, 0)
+
+    DroneController(drone1, case=1)
+    Drone2Controller(drone2)
+
+    app.run()
+
+if __name__ == "__main__":
+    main()
