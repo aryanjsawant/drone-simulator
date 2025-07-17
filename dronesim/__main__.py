@@ -21,7 +21,7 @@ def main():
     sim, controller1, drone1 = make_uav()
     _, controller2, drone2 = make_uav()
 
-    env = Panda3DEnvironment("basic_env", num_buildings=6)
+    env = Panda3DEnvironment("basic_env", num_buildings=10)
     app = SimulatorApplication(env, drone1, drone2)
 
     down_cam1 = Panda3DCameraSensor("downCameraRGB_1", size=(512, 512))
