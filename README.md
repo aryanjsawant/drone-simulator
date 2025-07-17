@@ -29,7 +29,7 @@ $ dronesim
 Or alternatively, execute the package using the Python interpreter:
 
 ```bash
-$ python -m dronesim
+$ py -m dronesim
 ```
 
 Refer to the `examples/` folder for running the simulator with custom controllers. You will need to clone this repo in order to access the examples.

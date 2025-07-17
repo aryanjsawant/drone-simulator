@@ -158,3 +158,5 @@ cython_debug/
 *.blend?
 
 venv/
+a_star_path.png
+occupancy_map.csv
