@@ -92,37 +92,12 @@ def main():
             logging.info("Drone is already in the air.")
 
     def land():
-        path = env.get_path()
-        if not path:
-            logging.info("No A* path available to determine landing goal. Generate the map first.")
-            return
-
         if drone.controller.drone.state.get('operation') == DroneState.LANDED:
             logging.info("Drone is already landed.")
             return
 
-        logging.info("Drone landing at goal.")
-
-        grid_rows, grid_cols = env.occupancy_map.shape
-        grid_cell_width = env.ENV_DIMENSIONS / grid_cols
-        grid_cell_height = env.ENV_DIMENSIONS / grid_rows
-
-        a_star_goal_node = path[-1]
-        final_x = (a_star_goal_node[1] * grid_cell_width) + (grid_cell_width / 2) - (env.ENV_DIMENSIONS / 2)
-        final_y = (a_star_goal_node[0] * grid_cell_height) + (grid_cell_height / 2) - (env.ENV_DIMENSIONS / 2)
-        final_pos = LVector3(final_x, final_y, 0)
-
-        current_pos = drone.get_pos(base.render)
-        vertical_speed = 10.0
-
-        seq = Sequence(LerpPosInterval(
-            drone,
-            duration=(final_pos - current_pos).length() / vertical_speed,
-            pos=final_pos,
-            startPos=current_pos
-        ), name="LandAtGoal")
-        seq.start()
-        taskMgr.doMethodLater(seq.getDuration(), lambda task: drone.controller.direct_action(DroneAction.LAND), "TriggerLand")
+        logging.info("Drone landing (controller will handle descent).")
+        drone.controller.direct_action(DroneAction.LAND)
 
     def start_autonomous_flight():
         current_pos = drone.get_pos(base.render)
