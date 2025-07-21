@@ -125,7 +125,9 @@ def main():
         taskMgr.doMethodLater(seq.getDuration(), lambda task: drone.controller.direct_action(DroneAction.LAND), "TriggerLand")
 
     def start_autonomous_flight():
-        if drone.controller.drone.state.get('operation') == DroneState.LANDED:
+        current_pos = drone.get_pos(base.render)
+        start_pos = LVector3(0, 0, 0)
+        if drone.controller.drone.state.get('operation') == DroneState.LANDED and current_pos == start_pos:
             path = env.get_path()
             if not path:
                 logging.info("No path available to follow. Generate the map first.")
@@ -134,7 +136,6 @@ def main():
             logging.info("Drone starting autonomous flight.")
 
             path_intervals = []
-            current_pos = drone.get_pos(base.render)
             takeoff_height = 50.0
             vertical_speed = 10.0
             horizontal_speed = 25.0
@@ -169,7 +170,7 @@ def main():
             seq = Sequence(*path_intervals, name="AutonomousFlight")
             seq.start()
         else:
-            logging.info("Drone must be on the ground to start autonomous flight.")
+            logging.info("Drone must be at the starting position (0, 0, 0) and landed to start autonomous flight.")
 
     def follow_path():
         path = env.get_path()
