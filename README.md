@@ -1,74 +1,97 @@
-# Drone Simulator
+# DroneSim: A Pathfinding Algorithm Comparison Platform
 
-This package includes modules and tools to simulate Vehicles (`land`, `water` or `aerial` vehicles (maybe even `space` at some point)) similar to a quadcopter or rover, and makes it easy to use it for various A.I. applications such as path following, obstacle avoidance, etc.
+## Explore and Compare Pathfinding Algorithms in a Simulated Environment
 
-It comes with a bunch of sensors that can be attached to the Vehicle or UAV, such as a Camera (RGB and Depth), IMU (motion), and more to come.
-The simulator can have an "objective" set to generate observations for machine learning applications.
+DroneSim is a simulation platform built with Panda3D, designed to help you understand and compare various pathfinding algorithms in a dynamic, 3D environment. While capable of simulating different vehicle types, its core focus is on visualizing how algorithms like A*, Dijkstra, BFS, and DFS navigate complex spaces.
 
-## Features
-TODO
+### Key Aspects of DroneSim:
 
-## Installation
+- **Algorithm Comparison**: Easily switch between and observe the performance of different pathfinding algorithms.
+- **Interactive Simulation**: Visualize drone movement and path generation in real-time.
+- **Sensor Integration**: Basic sensor models (like cameras and IMU) are included to provide context for environmental interaction.
+- **Extensible Design**: The modular structure allows for further development and integration of new algorithms or vehicle models.
 
-Install the package using pip from :
+---
+
+## Features:
+
+- **Multiple Pathfinding Algorithms**: Supports A*, Dijkstra, Breadth-First Search (BFS), and Depth-First Search (DFS).
+- **3D Environment**: Navigate through simulated environments with obstacles and buildings.
+- **Vehicle Simulation**: Includes a basic drone model for path execution.
+- **Real-time Visualization**: See paths being generated and followed.
+
+---
+
+## Installation:
+
+Install the package using pip:
 
 ```bash
 pip install git+https://github.com/nb-programmer/dronesim.git
 ```
 
-## Usage
+---
 
-Run the default simulator which launches a window with keyboard controls and a scene with an elliptical path to traverse.
+## Usage: Running Simulations and Comparing Algorithms
 
-To run the simulator, call the package name in the terminal:
+To run the default simulator, which launches a window with keyboard controls and a scene, use:
 
 ```bash
 $ dronesim
 ```
 
-Or alternatively, execute the package using the Python interpreter:
+Alternatively, execute the package using the Python interpreter:
 
 ```bash
 $ py -m dronesim
 ```
 
-Refer to the `examples/` folder for running the simulator with custom controllers. You will need to clone this repo in order to access the examples.
+### Comparing Pathfinding Algorithms:
 
-## Controls
+The main purpose of DroneSim is to compare how different pathfinding algorithms perform. You can specify the algorithm to use when launching the simulator using the `--algo` argument:
 
-### Simulator controls
+```bash
+$ dronesim --algo a_star
+$ dronesim --algo dijkstra
+$ dronesim --algo bfs
+$ dronesim --algo dfs
+```
 
-Use the keyboard and mouse to interact with the simulator app.
+After launching with a chosen algorithm, press `c` in the simulator window to trigger the autonomous flight based on the selected pathfinding algorithm. A visualization of the generated path will be saved as `path.png` in the current working directory.
 
-The default mouse control is set to `Free mode` with mouse for looking.
+Refer to the `examples/` folder (available after cloning this repository) for more advanced usage and custom controller implementations.
 
-Key|Action
----|---
-Esc|Unlock/Lock and Show/Hide mouse
-F1|Toggle visibility of HUD
-F3|Toggle visibility of debug view
-Shift+F3|Connect to Panda3D's PStats tool for profiling
-F5|Change camera mode from one of [Free, First Person or Third Person]
-F6|Toggle your control between camera and the Vehicle
-F8|Toggle wireframe render
-F11|Toggle fullscreen
-v|Show/hide all buffers
-`\`|Dump current simulator state to console
+---
 
-### Default drone/camera controls
+## Controls:
 
-Use the keyboard to control the drone or camera, with the following binds:
+### Simulator Controls:
 
-Key|Action
----|---
-I|Take off
-K|Land
-W|Move forwards
-S|Move backwards
-A|Move left
-D|Move right
-Up arrow|Increase altitude
-Down arrow|Decrease altitude
-Left arrow|Heading counter-clockwise
-Right arrow|Heading clockwise
-Mouse wheel|Free cam: change fly speed; Third Person cam: Change orbit radius
+| Key       | Action                                     |
+| :-------- | :----------------------------------------- |
+| `Esc`     | Unlock/Lock and Show/Hide mouse            |
+| `F1`      | Toggle visibility of HUD                   |
+| `F3`      | Toggle visibility of debug view            |
+| `Shift+F3`| Connect to Panda3D's PStats tool for profiling |
+| `F5`      | Change camera mode (Free, First Person, Third Person) |
+| `F6`      | Toggle control between camera and vehicle  |
+| `F8`      | Toggle wireframe render                    |
+| `F11`     | Toggle fullscreen                          |
+| `v`       | Show/hide all buffers                      |
+| ``\``    | Dump current simulator state to console    |
+
+### Default Drone/Camera Controls:
+
+| Key         | Action                                   |
+| :---------- | :--------------------------------------- |
+| `I`         | Take off                                 |
+| `K`         | Land                                     |
+| `W`         | Move forwards                            |
+| `S`         | Move backwards                           |
+| `A`         | Move left                                |
+| `D`         | Move right                               |
+| `Up arrow`  | Increase altitude                        |
+| `Down arrow`| Decrease altitude                        |
+| `Left arrow`| Heading counter-clockwise                |
+| `Right arrow`| Heading clockwise                       |
+| `Mouse wheel`| Free cam: change fly speed; Third Person cam: Change orbit radius |
