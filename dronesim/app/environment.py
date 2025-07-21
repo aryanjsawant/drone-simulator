@@ -32,6 +32,7 @@ class Panda3DEnvironment(NodePath):
     DEFAULT_SCENE = Filename("dronesim/assets/scenes/simple_loop.glb")
     DEFAULT_LOADER = Loader(None)
     ENV_DIMENSIONS = 320
+    TARGET_BUILDING_HEIGHT = 50.0 # All buildings will aim for this height
 
     def __init__(self,
                  name: str,
@@ -52,7 +53,7 @@ class Panda3DEnvironment(NodePath):
         self.algorithm = algorithm
         self._attach_lights = attach_lights
         self._loader = loader
-        self.building_positions = []
+        self.building_data = [] # Store (NodePath, position, scaled_size) for each building
         self.occupancy_map = np.zeros((6, 8), dtype=int)
         self.path = {}
 
@@ -145,11 +146,12 @@ class Panda3DEnvironment(NodePath):
             min_point, max_point = model.getTightBounds()
             model_size = max_point - min_point
 
-            # Set a random scale
+            # Set a random scale, but force Z to TARGET_BUILDING_HEIGHT
             scale_x = (self.ENV_DIMENSIONS / 8) / model_size.x
             scale_y = (self.ENV_DIMENSIONS / 6) / model_size.y
+            scale_z = self.TARGET_BUILDING_HEIGHT / model_size.z # Scale Z to target height
             scale_val = min(scale_x, scale_y)
-            scale = LVecBase3f(scale_val, scale_val, scale_val)
+            scale = LVecBase3f(scale_val, scale_val, scale_z) # Use scale_z for Z-axis
             scaled_size = LVecBase3f(model_size.x * scale.x, model_size.y * scale.y, model_size.z * scale.z)
 
             # Calculate placement bounds to keep the building inside the environment
@@ -170,7 +172,7 @@ class Panda3DEnvironment(NodePath):
                     continue
                 
                 is_well_spaced = True
-                for existing_pos in self.building_positions:
+                for _, existing_pos, _ in self.building_data:
                     if (position - existing_pos).length() < min_spacing:
                         is_well_spaced = False
                         break
@@ -179,7 +181,8 @@ class Panda3DEnvironment(NodePath):
                     occupied_cells.add((grid_x, grid_y))
                     break
             
-            self.building_positions.append(position)
+            # Store the model, its position, and its scaled size
+            self.building_data.append((model, position, scaled_size))
 
             # Attach and transform the model
             model.reparent_to(self)
@@ -241,12 +244,15 @@ class Panda3DEnvironment(NodePath):
         else:
             print(f"[ERROR] Unknown algorithm: {self.algorithm}")
 
-        if self.path:
-            print(f"[{self.algorithm.upper()}] Path found: {self.path}")
-            plot_path(grid, self.path, "path.png", title=f"{self.algorithm.upper()} Path")
-            print("Saved path visualization to path.png")
-        else:
-            print(f"[{self.algorithm.upper()}] No path found from {start_node} to {goal_node}.")
-
     def get_path(self):
         return self.path
+
+    def get_building_hover_points(self) -> List[LVecBase3f]:
+        hover_points = []
+        for model, position, scaled_size in self.building_data:
+            # Calculate the top-center of the building
+            # Assuming position is the base center, add half of the scaled height to the Z-coordinate
+            hover_z = 100
+            hover_point = LVecBase3f(position.x, position.y, hover_z)
+            hover_points.append(hover_point)
+        return hover_points

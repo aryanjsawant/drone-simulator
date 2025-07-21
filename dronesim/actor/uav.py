@@ -1,9 +1,10 @@
 from panda3d.core import NodePath, Filename, Point3, TextNode
+from direct.interval.IntervalGlobal import LerpPosInterval, Sequence
 from .vehicle import VehicleModel
 from dronesim.interface.control import IDroneControllable
 from dronesim.utils import rad2deg
 from dronesim.types import PandaFilePath, StateType
-from typing import Union, Dict
+from typing import Union, Dict, List
 from time import time
 from direct.gui.OnscreenText import OnscreenText
 import random
@@ -160,3 +161,37 @@ class UAVDroneModel(VehicleModel):
                         bone['bone'].setH(bone['bone'].getH() + prop_vel * bone['spinDir'])
 
         super().update()
+
+    def go_to_and_hover(self, target_pos: Point3, speed: float = 20.0):
+        current_pos = self.getPos()
+        distance = (target_pos - current_pos).length()
+        duration = distance / speed if speed > 0 else 1.0
+
+        # Create a LerpPosInterval to move the drone to the target position
+        # The 'blendType' can be 'easeInOut', 'easeIn', 'easeOut', 'noBlend'
+        # For hovering, we just move to the position and then rely on the physics engine to maintain it
+        self.lerp_interval = LerpPosInterval(self, duration, target_pos, startPos=current_pos, blendType='easeInOut')
+        self.lerp_interval.start()
+
+    def follow_waypoints(self, waypoints: List[Point3], speed: float = 20.0):
+        if not waypoints:
+            return
+
+        intervals = []
+        current_pos = self.getPos()
+
+        for i, waypoint in enumerate(waypoints):
+            distance = (waypoint - current_pos).length()
+            duration = distance / speed if speed > 0 else 1.0
+            intervals.append(LerpPosInterval(self, duration, waypoint, startPos=current_pos, blendType='easeInOut'))
+            current_pos = waypoint
+        
+        # After moving through all waypoints, ensure it hovers at the last one
+        # This is implicitly handled by the physics engine maintaining the last set position
+        
+        self.waypoint_sequence = Sequence(*intervals)
+        self.waypoint_sequence.start()
+
+    def is_moving(self) -> bool:
+        return (self.lerp_interval and self.lerp_interval.isPlaying()) or \
+               (self.waypoint_sequence and self.waypoint_sequence.isPlaying())
