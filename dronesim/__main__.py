@@ -16,12 +16,14 @@ logging.basicConfig(level=logging.INFO)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.parse_args()
+    parser.add_argument("--algo", choices=["a_star", "dijkstra", "bfs", "dfs"], default="a_star",
+                        help="Choose the pathfinding algorithm to use.")
+    args = parser.parse_args()
 
     sim, controller1, drone1 = make_uav()
     _, controller2, drone2 = make_uav()
 
-    env = Panda3DEnvironment("basic_env", num_buildings=10)
+    env = Panda3DEnvironment("basic_env", num_buildings=6, algorithm=args.algo)
     app = SimulatorApplication(env, drone1, drone2)
 
     down_cam1 = Panda3DCameraSensor("downCameraRGB_1", size=(512, 512))
@@ -105,8 +107,8 @@ def main():
         Handles the 'k' key press.
         Lands drone 2 at the A* goal position.
         """
-        a_star_path = env.get_a_star_path()
-        if not a_star_path:
+        path = env.get_path()
+        if not path:
             logging.info("No A* path available to determine landing goal. Generate the map first.")
             return
 
@@ -114,14 +116,14 @@ def main():
             logging.info("Drone 2 is already landed.")
             return
 
-        logging.info("Drone 2 landing at A* goal.")
+        logging.info("Drone 2 landing at goal.")
 
         grid_rows, grid_cols = env.occupancy_map.shape
         grid_cell_width = env.ENV_DIMENSIONS / grid_cols
         grid_cell_height = env.ENV_DIMENSIONS / grid_rows
 
         # Get the A* goal node from the environment (which is the last node in the path)
-        a_star_goal_node = a_star_path[-1]
+        a_star_goal_node = path[-1]
         final_landing_x = (a_star_goal_node[1] * grid_cell_width) + (grid_cell_width / 2) - (env.ENV_DIMENSIONS / 2)
         final_landing_y = (a_star_goal_node[0] * grid_cell_height) + (grid_cell_height / 2) - (env.ENV_DIMENSIONS / 2)
         final_landing_pos = LVector3(final_landing_x, final_landing_y, 0)
@@ -145,8 +147,8 @@ def main():
         Handles the 'x' key press.
         Returns drone 2 to the A* start position.
         """
-        a_star_path = env.get_a_star_path()
-        if not a_star_path:
+        path = env.get_path()
+        if not path:
             logging.info("No A* path available to determine start position. Generate the map first.")
             return
 
@@ -157,7 +159,7 @@ def main():
         grid_cell_height = env.ENV_DIMENSIONS / grid_rows
 
         # Get the A* start node from the environment (which is the first node in the path)
-        a_star_start_node = a_star_path[0]
+        a_star_start_node = path[0]
         target_world_x = (a_star_start_node[1] * grid_cell_width) + (grid_cell_width / 2) - (env.ENV_DIMENSIONS / 2)
         target_world_y = (a_star_start_node[0] * grid_cell_height) + (grid_cell_height / 2) - (env.ENV_DIMENSIONS / 2)
         target_world_pos = LVector3(target_world_x, target_world_y, 50.0) # Return to takeoff height
@@ -197,9 +199,9 @@ def main():
         """
         if drone2.controller.drone.state.get('operation') == DroneState.LANDED:
             logging.info("Drone 2 starting autonomous sequence.")
-            a_star_path = env.get_a_star_path()
-            if not a_star_path:
-                logging.info("No A* path available to follow. Generate the map first.")
+            path = env.get_path()
+            if not path:
+                logging.info("No path available to follow. Generate the map first.")
                 return
 
             path_intervals = []
@@ -224,7 +226,7 @@ def main():
             logging.info("Drone 2 takeoff complete.")
 
             # 2. Follow A* path
-            for i, grid_node in enumerate(a_star_path):
+            for i, grid_node in enumerate(path):
                 target_world_x = (grid_node[1] * grid_cell_width) + (grid_cell_width / 2) - (env.ENV_DIMENSIONS / 2)
                 target_world_y = (grid_node[0] * grid_cell_height) + (grid_cell_height / 2) - (env.ENV_DIMENSIONS / 2)
                 target_world_pos = LVector3(target_world_x, target_world_y, takeoff_height)
@@ -240,11 +242,11 @@ def main():
                 ))
                 current_world_pos = target_world_pos
 
-            logging.info("Drone 2 finished following A* path.")
+            logging.info(f"Drone 2 finished following {args.algo} path.")
 
             # 3. Land at the end of the A* path
-            if a_star_path:
-                last_grid_node = a_star_path[-1]
+            if path:
+                last_grid_node = path[-1]
                 final_landing_x = (last_grid_node[1] * grid_cell_width) + (grid_cell_width / 2) - (env.ENV_DIMENSIONS / 2)
                 final_landing_y = (last_grid_node[0] * grid_cell_height) + (grid_cell_height / 2) - (env.ENV_DIMENSIONS / 2)
                 final_landing_pos = LVector3(final_landing_x, final_landing_y, 0)
@@ -257,20 +259,20 @@ def main():
                 pos=final_landing_pos,
                 startPos=current_world_pos
             ))
-            logging.info("Drone 2 landing at A* goal.")
+            logging.info("Drone 2 landing at goal.")
 
             seq = Sequence(*path_intervals, name="AutonomousFlightSequence")
             seq.start()
         else:
             logging.info("Drone 2 must be on the ground to start autonomous flight.")
 
-    def follow_a_star_path():
+    def follow_path():
         """
         Handles the 'p' key press.
         Makes drone 2 follow the A* path generated in the environment.
         """
-        a_star_path = env.get_a_star_path()
-        if not a_star_path:
+        path = env.get_path()
+        if not path:
             logging.info("No A* path available to follow. Generate the map first.")
             return
 
@@ -302,7 +304,7 @@ def main():
             current_world_pos = takeoff_target_pos
 
         # Traverse the A* path
-        for i, grid_node in enumerate(a_star_path):
+        for i, grid_node in enumerate(path):
             # Convert grid coordinates to world coordinates (center of the cell)
             target_world_x = (grid_node[1] * grid_cell_width) + (grid_cell_width / 2) - (env.ENV_DIMENSIONS / 2)
             target_world_y = (grid_node[0] * grid_cell_height) + (grid_cell_height / 2) - (env.ENV_DIMENSIONS / 2)
@@ -321,8 +323,8 @@ def main():
             current_world_pos = target_world_pos
 
         # Final landing at the end of the path
-        if a_star_path:
-            last_grid_node = a_star_path[-1]
+        if path:
+            last_grid_node = path[-1]
             final_landing_x = (last_grid_node[1] * grid_cell_width) + (grid_cell_width / 2) - (env.ENV_DIMENSIONS / 2)
             final_landing_y = (last_grid_node[0] * grid_cell_height) + (grid_cell_height / 2) - (env.ENV_DIMENSIONS / 2)
             final_landing_pos = LVector3(final_landing_x, final_landing_y, 0)
@@ -344,7 +346,7 @@ def main():
     app.accept("x", stop_circular_path)
     app.accept("k", land_drone)
     app.accept("c", start_autonomous_flight)
-    app.accept("p", follow_a_star_path)
+    app.accept("p", follow_path)
 
     app.run()
 

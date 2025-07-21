@@ -2,7 +2,12 @@ import os
 import random
 import csv
 import numpy as np
-from dronesim.algorithms.a_star import a_star, read_occupancy_map, plot_path
+from dronesim.algorithms.a_star import a_star
+from dronesim.algorithms.dijkstra import dijkstra
+from dronesim.algorithms.bfs import bfs
+from dronesim.algorithms.dfs import dfs
+from dronesim.algorithms.utils import plot_path, read_occupancy_map
+
 from panda3d.core import (
     NodePath,
     PandaNode,
@@ -36,14 +41,20 @@ class Panda3DEnvironment(NodePath):
                  enable_dull_ambient_light: bool = True,
                  loader: Loader = DEFAULT_LOADER,
                  task_mgr: Task.TaskManager = TaskManagerGlobal.taskMgr,
-                 num_buildings: int = 9):
+                 num_buildings: int = 6,
+                 algorithm="a_star",
+                seed: Optional[int] = None):
         super().__init__(name)
 
+        if seed is not None:
+            random.seed(seed)
+
+        self.algorithm = algorithm
         self._attach_lights = attach_lights
         self._loader = loader
         self.building_positions = []
         self.occupancy_map = np.zeros((6, 8), dtype=int)
-        self.a_star_path = None # Store the A* path here
+        self.path = {}
 
         # Add ambient lighting (minimum scene light)
         if enable_dull_ambient_light:
@@ -62,7 +73,7 @@ class Panda3DEnvironment(NodePath):
         self._attach_lights.append(dir_light)
 
         self._setup_scene_lighting()
-        task_mgr.add(self._load_random_buildings(num_buildings))
+        self._load_random_buildings(num_buildings)
 
         # Load the given scene, if any
         if scene_model is not None:
@@ -115,7 +126,7 @@ class Panda3DEnvironment(NodePath):
                 raise TypeError(
                     "Received a light that has incorrect type (must be a subclass of p3d.Light).")
 
-    async def _load_random_buildings(self, num_buildings: int):
+    def _load_random_buildings(self, num_buildings: int):
         building_assets_dir = "dronesim/assets/buildings"
         building_models = [os.path.join(building_assets_dir, f) for f in os.listdir(building_assets_dir) if f.endswith(".glb")]
         safe_radius = 50.0
@@ -130,7 +141,7 @@ class Panda3DEnvironment(NodePath):
             model_path = random.choice(building_models)
             
             # Load the model to get its size
-            model = await self._loader.load_model(model_path, blocking=False)
+            model = self._loader.load_model(model_path, blocking=True)
             min_point, max_point = model.getTightBounds()
             model_size = max_point - min_point
 
@@ -207,29 +218,35 @@ class Panda3DEnvironment(NodePath):
         self._save_and_print_map()
 
     def _save_and_print_map(self):
-        # Print map to console
         print("Occupancy Map:")
         print(self.occupancy_map)
 
-        # Save map to CSV
         with open("occupancy_map.csv", "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerows(self.occupancy_map)
 
-        # Run A* algorithm
         grid = read_occupancy_map("occupancy_map.csv")
-        start_node = (3, 4)  # Corresponds to drone's (0,0,0) world position
-        goal_node = (5, 7)  # Example goal node
-        path = a_star(grid, start_node, goal_node)
+        start_node = (3, 4)
+        goal_node = (5, 7)
 
-        if path:
-            print("A* Path found:", path)
-            plot_path(grid, path, "a_star_path.png")
-            print("A* path image saved to a_star_path.png")
-            self.a_star_path = path
+        path = None
+        if self.algorithm == "a_star":
+            self.path = a_star(grid, start_node, goal_node)
+        elif self.algorithm == "dijkstra":
+            self.path = dijkstra(grid, start_node, goal_node)
+        elif self.algorithm == "bfs":
+            self.path = bfs(grid, start_node, goal_node)
+        elif self.algorithm == "dfs":
+            self.path = dfs(grid, start_node, goal_node)
         else:
-            print("No A* path found.")
-            self.a_star_path = None
+            print(f"[ERROR] Unknown algorithm: {self.algorithm}")
 
-    def get_a_star_path(self):
-        return self.a_star_path
+        if self.path:
+            print(f"[{self.algorithm.upper()}] Path found: {self.path}")
+            plot_path(grid, self.path, "path.png", title=f"{self.algorithm.upper()} Path")
+            print("Saved path visualization to path.png")
+        else:
+            print(f"[{self.algorithm.upper()}] No path found from {start_node} to {goal_node}.")
+
+    def get_path(self):
+        return self.path
