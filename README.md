@@ -1,5 +1,19 @@
 # DroneSim: A Pathfinding Algorithm Comparison Platform
 
+This repository contains the simulation code and supporting materials for the journal paper:
+
+**Applications and Energy Modelling of UAVs in Mobile Networks**  
+**Authors:** Arnav Sawant, Aryan Sawant  
+**Journal:** International Journal of Research in Engineering, Science and Management (IJRESM)  
+**Volume:** 8, Issue 10  
+**Publication Date:** October 2025  
+**Pages:** 42–46  
+
+📄 **Paper (PDF):**  
+[Download the published paper](./Applications_and_Energy_Modelling_of_UAVs_in_Mobile_Networks.pdf)
+
+---
+
 ## Explore and Compare Pathfinding Algorithms in a Simulated Environment
 
 DroneSim is a simulation platform built with Panda3D, designed to help you understand and compare various pathfinding algorithms in a dynamic, 3D environment. While capable of simulating different vehicle types, its core focus is on visualizing how algorithms like A*, Dijkstra, BFS, and DFS navigate complex spaces.
